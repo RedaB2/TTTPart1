@@ -25,9 +25,9 @@ In order to run the program and run local tests with preset boards, uncomment th
 ```
 
 
-## 2. evaluate_terminal()
+## 2. evalTerminalState(boardState, myMark)
 
-The AI uses evaluate_terminal() function as its utility function. It operates as follows:
+The AI uses evalTerminalState(boardState, myMark) function as its utility function. It operates as follows:
 
 - Winning Terminal States:
     If the board shows that your player (e.g., 'X' for blue) has won, the function returns +100.

@@ -2,249 +2,231 @@ import sys
 import math
 
 ###############################################################################
-# GLOBAL CONSTANTS & UTILITIES
+# GLOBAL CONSTANTS & RANDOM STUFF
 ###############################################################################
 
-NAME = "Unstoppable"
+nameStr = "player222"
 
-# Map move strings (e.g., 'a1', 'b3') to (row, col)
-MAPMOVCOORD = {
+# Mapping from move strings (e.g., 'a1', 'b3') to (row, col)
+move2Pos = {
     'a1': (0, 0), 'a2': (1, 0), 'a3': (2, 0),
     'b1': (0, 1), 'b2': (1, 1), 'b3': (2, 1),
     'c1': (0, 2), 'c2': (1, 2), 'c3': (2, 2),
 }
 
-# Reverse mapping for convenience
-COORD_TO_MOVE = {v: k for k, v in MAPMOVCOORD.items()}
+# Reverse mapping for convenience (but not really following any particular style)
+pos2Move = {v: k for k, v in move2Pos.items()}
 
-def opposite_player(symbol):
+
+def flipPlayer(playerVal):
     """Given 'X' returns 'O'; given 'O' returns 'X'."""
-    return 'O' if symbol == 'X' else 'X'
+    return 'O' if playerVal == 'X' else 'X'
 
 
 ###############################################################################
-# GAME LOGIC
+# GAME STUFF
 ###############################################################################
 
-def create_empty_board():
-    return [['.' for _ in range(3)] for _ in range(3)]
+def makeEmptyBoard():
+    return [['.' for x in range(3)] for y in range(3)]
 
-def check_winner(board):
+
+def winChecker(boardState):
     """
     Returns 'X' if X has a winning line, 'O' if O has a winning line, None otherwise.
     """
-    rows = [''.join(board[r]) for r in range(3)]
-    cols = [''.join(board[r][c] for r in range(3)) for c in range(3)]
-    diags = [
-        board[0][0] + board[1][1] + board[2][2],
-        board[0][2] + board[1][1] + board[2][0]
+    rowLines = [''.join(boardState[i]) for i in range(3)]
+    colLines = [''.join(boardState[r][j] for r in range(3)) for j in range(3)]
+    diagLines = [
+        boardState[0][0] + boardState[1][1] + boardState[2][2],
+        boardState[0][2] + boardState[1][1] + boardState[2][0]
     ]
 
-    lines = rows + cols + diags
-    if 'XXX' in lines:
+    allLines = rowLines + colLines + diagLines
+    if 'XXX' in allLines:
         return 'X'
-    if 'OOO' in lines:
+    if 'OOO' in allLines:
         return 'O'
     return None
 
-def board_is_full(board):
-    """Return True if no '.' found, else False."""
-    for r in range(3):
-        for c in range(3):
-            if board[r][c] == '.':
+
+def boardFull(boardState):
+    """Return True if board is completely filled; otherwise False."""
+    for i in range(3):
+        for j in range(3):
+            if boardState[i][j] == '.':
                 return False
     return True
 
-def is_terminal(board):
+
+def terminalCheck(boardState):
     """
-    Check if the board is ful (draw) or win.
+    Check if the board is in a terminal state (win or draw).
     """
-    if check_winner(board) is not None:
+    if winChecker(boardState) is not None:
         return True
-    if board_is_full(board):
+    if boardFull(boardState):
         return True
     return False
 
-def get_legal_moves(board):
-    """List of positions that are open and legal."""
-    moves = []
-    for r in range(3):
-        for c in range(3):
-            if board[r][c] == '.':
-                moves.append((r, c))
-    return moves
+
+def getAvailMoves(boardState):
+    """Return a list of available moves as (row, col) tuples."""
+    movesAvail = []
+    for i in range(3):
+        for j in range(3):
+            if boardState[i][j] == '.':
+                movesAvail.append((i, j))
+    return movesAvail
 
 
-def evaluate_terminal(board, my_symbol):
+def evalTerminalState(boardState, myMark):
     """
-    utility function
-      +100 if my_symbol has won
-      -100 if the opponent has won
-       0 if draw or no winner
+    Utility function:
+      +100 if myMark wins,
+      -100 if the opponent wins,
+       0 for draw or non-terminal.
     """
-    winner = check_winner(board)
-    if winner is None:
-        return 0  # no winner or draw
-    return 100 if winner == my_symbol else -100
+    winRes = winChecker(boardState)
+    if winRes is None:
+        return 0
+    return 100 if winRes == myMark else -100
 
-def alpha_beta_minimax(board, depth, alpha, beta, maximizing, my_symbol):
+
+def miniMaxAlphaBeta(boardState, depthLeft, a_val, b_val, isMax, myMark):
     """
-    alpha beta min-max --> 
-    Returns (best_value, best_move).
+    Alpha-beta minimax search.
+    Returns a tuple (bestScore, bestMove).
     """
-    if is_terminal(board) or depth == 0:
-        return evaluate_terminal(board, my_symbol), None
+    if terminalCheck(boardState) or depthLeft == 0:
+        return evalTerminalState(boardState, myMark), None
 
-    active_player = my_symbol if maximizing else opposite_player(my_symbol)
-    legal_moves = get_legal_moves(board)
+    currPlayer = myMark if isMax else flipPlayer(myMark)
+    movesList = getAvailMoves(boardState)
 
-    if not legal_moves:
-        # is board full? 
-        return evaluate_terminal(board, my_symbol), None
+    if not movesList:
+        return evalTerminalState(boardState, myMark), None
 
-    best_move = None
+    bestMoveFound = None
 
-    if maximizing:
-        value = -math.inf
-        for (r, c) in legal_moves:
-            board[r][c] = active_player
-            child_val, _ = alpha_beta_minimax(board, depth - 1, alpha, beta,
-                                              False, my_symbol)
-            board[r][c] = '.'
-            if child_val > value:
-                value = child_val
-                best_move = (r, c)
-            alpha = max(alpha, value)
-            if alpha >= beta:
-                break  # beta prune
-        return value, best_move
-
+    if isMax:
+        bestScore = -math.inf
+        for (i, j) in movesList:
+            boardState[i][j] = currPlayer
+            score, _ = miniMaxAlphaBeta(boardState, depthLeft - 1, a_val, b_val, False, myMark)
+            boardState[i][j] = '.'
+            if score > bestScore:
+                bestScore = score
+                bestMoveFound = (i, j)
+            a_val = max(a_val, bestScore)
+            if a_val >= b_val:
+                break  # beta pruning
+        return bestScore, bestMoveFound
     else:
-        value = math.inf
-        for (r, c) in legal_moves:
-            board[r][c] = active_player
-            child_val, _ = alpha_beta_minimax(board, depth - 1, alpha, beta,
-                                              True, my_symbol)
-            board[r][c] = '.'
-            if child_val < value:
-                value = child_val
-                best_move = (r, c)
-            beta = min(beta, value)
-            if beta <= alpha:
-                break  # alpha prune
-        return value, best_move
+        bestScore = math.inf
+        for (i, j) in movesList:
+            boardState[i][j] = currPlayer
+            score, _ = miniMaxAlphaBeta(boardState, depthLeft - 1, a_val, b_val, True, myMark)
+            boardState[i][j] = '.'
+            if score < bestScore:
+                bestScore = score
+                bestMoveFound = (i, j)
+            b_val = min(b_val, bestScore)
+            if b_val <= a_val:
+                break  # alpha pruning
+        return bestScore, bestMoveFound
 
 
-def choose_move(board, my_symbol):
+def pickMyMove(boardState, myMark):
     """
-    Decide which move to make using alpha-beta search (depth = 9).
-    Return the move in string form, e.g., 'b2'.
-    If no possible move (terminal state), return 'a1' just as a placeholder.
+    Choose a move using alpha-beta search (with a depth of 9).
+    Returns the move in string format (e.g., 'b2').
+    If no move is available, returns 'a1' as a fallback.
     """
-    depth_limit = 9
-    maximizing = True  # we always treat our own turn as "maximizing"
-
-    best_value, best_rc = alpha_beta_minimax(board, depth_limit,
-                                             -math.inf, math.inf,
-                                             maximizing, my_symbol)
-    if best_rc is None:
-        # terminal?
-        return "a1"  # fallback
-
-    return COORD_TO_MOVE[best_rc]
+    searchDepth = 9
+    maxTurn = True  # our turn is always maximizing
+    bestVal, moveRC = miniMaxAlphaBeta(boardState, searchDepth, -math.inf, math.inf, maxTurn, myMark)
+    if moveRC is None:
+        return "a1"  # fallback if terminal
+    return pos2Move[moveRC]
 
 
-def main():
+def mainLoop():
     """
-    ENTRY POINT FOR REFEREE
+    Main entry point when running with the referee.
     """
-    board = create_empty_board()
-    my_symbol = None
+    boardState = makeEmptyBoard()
+    myMark = None
 
-    for line in sys.stdin:
-        line = line.strip()
+    for inLine in sys.stdin:
+        inLine = inLine.strip()
 
-        # status of the game?
-        if line.startswith("END:"):
-            # no more moves
+        # Check if game ended
+        if inLine.startswith("END:"):
             break
 
-        if my_symbol is None:
-            # blue or orange from ref
-            if line == "blue":
-                my_symbol = 'X'
-                # we are first player => make an immediate move
-                move_str = choose_move(board, my_symbol)
-                
-                r, c = MAPMOVCOORD[move_str]
-                board[r][c] = my_symbol
-                
-                print(move_str, flush=True)
-
-            elif line == "orange":
-                my_symbol = 'O'
+        if myMark is None:
+            if inLine == "blue":
+                myMark = 'X'
+                chosenMove = pickMyMove(boardState, myMark)
+                pos_r, pos_c = move2Pos[chosenMove]
+                boardState[pos_r][pos_c] = myMark
+                print(chosenMove, flush=True)
+            elif inLine == "orange":
+                myMark = 'O'
                 continue
-
             else:
                 continue
-
         else:
-            if line in MAPMOVCOORD:
-                (opp_r, opp_c) = MAPMOVCOORD[line]
-                opp_symbol = opposite_player(my_symbol)
-
-            
-                if board[opp_r][opp_c] == '.':
-                    board[opp_r][opp_c] = opp_symbol
-
-                
-                if not is_terminal(board):
-                    move_str = choose_move(board, my_symbol)
-                    
-                    rr, cc = MAPMOVCOORD[move_str]
-                    board[rr][cc] = my_symbol
-
-                    print(move_str, flush=True)
+            if inLine in move2Pos:
+                opp_r, opp_c = move2Pos[inLine]
+                oppMark = flipPlayer(myMark)
+                if boardState[opp_r][opp_c] == '.':
+                    boardState[opp_r][opp_c] = oppMark
+                if not terminalCheck(boardState):
+                    nextMove = pickMyMove(boardState, myMark)
+                    new_r, new_c = move2Pos[nextMove]
+                    boardState[new_r][new_c] = myMark
+                    print(nextMove, flush=True)
                 else:
                     pass
-
             else:
                 continue
 
 
 ###############################################################################
-# TESTING (IF REFEREE ISNT USED)
+# OFFLINE TESTING (WHEN NOT USING THE REFEREE)
 ###############################################################################
 
-def run_offline_tests():
+def offlineTestRun():
     print("=== START TESTING ===")
+    
+    board_A = makeEmptyBoard()
+    testMove1 = pickMyMove(board_A, "X")
+    print("Test 1 (Empty board, X to move): returned move:", testMove1)
 
-    board1 = create_empty_board()
-    move1 = choose_move(board1, "X")
-    print("Test 1 (Empty board, X to move): returned move:", move1)
-
-    board2 = [
+    board_B = [
         ['X', 'O', 'X'],
         ['.', 'O', '.'],
         ['.', '.', '.']
     ]
-    move2 = choose_move(board2, "X")
-    print("Test 2 (Board2, X to move):", move2)
+    testMove2 = pickMyMove(board_B, "X")
+    print("Test 2 (Board B, X to move):", testMove2)
 
-    board3 = [
+    board_C = [
         ['X', 'O', 'O'],
         ['X', '.', '.'],
         ['.', '.', '.']
     ]
-    move3 = choose_move(board3, "X")
-    print("Test 3 (Board3, X can win):", move3)
+    testMove3 = pickMyMove(board_C, "X")
+    print("Test 3 (Board C, X can win):", testMove3)
 
     print("=== END TESTING ===")
 
 
 if __name__ == "__main__":
-    # uncomment this line for testing
-    #run_offline_tests()
+    # Uncomment the next line to run offline tests
+    # offlineTestRun()
 
-    # For referee-based play:
-    main()
+    # Run with referee input:
+    mainLoop()
